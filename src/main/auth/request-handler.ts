@@ -1,25 +1,26 @@
+declare const __static: string;
+
+import Http from 'http'
+import Url from 'url'
+import fs from 'fs'
+import path from 'path'
+import { EventEmitter } from 'events'
+
 import {
   AuthorizationRequest,
   AuthorizationRequestHandler,
   AuthorizationRequestResponse,
-  AuthorizationServiceConfiguration
+  AuthorizationServiceConfiguration,
+  BasicQueryStringUtils,
+  QueryStringUtils,
+  AuthorizationError,
+  AuthorizationResponse,
+  Crypto
 } from '@openid/appauth'
 
-import { EventEmitter } from 'events'
-import {
-  BasicQueryStringUtils,
-  QueryStringUtils
-} from '@openid/appauth/src/query_string_utils'
-import { Crypto } from '@openid/appauth/src/crypto_utils'
-import { NodeCrypto } from '@openid/appauth/src/node_support/crypto_utils'
-import Http from 'http'
-import Url from 'url'
-import { log } from '@openid/appauth/src/logger'
-import {
-  AuthorizationError,
-  AuthorizationResponse
-} from '@openid/appauth/src/authorization_response'
+import { NodeCrypto } from '@openid/appauth/src/node_support'
 
+import { log } from '../logger'
 import Main from '../main'
 
 class ServerEventsEmitter extends EventEmitter {
@@ -38,16 +39,6 @@ export class ElectronRequestHandler extends AuthorizationRequestHandler {
     crypto: Crypto = new NodeCrypto()
   ) {
     super(utils, crypto)
-  }
-
-  protected completeAuthorizationRequest(): Promise<AuthorizationRequestResponse | null> {
-    if (!this.authorizationPromise) {
-      return Promise.reject(
-        'No pending authorization request. Call performAuthorizationRequest() ?'
-      )
-    }
-
-    return this.authorizationPromise
   }
 
   performAuthorizationRequest(
@@ -104,11 +95,26 @@ export class ElectronRequestHandler extends AuthorizationRequestHandler {
         response: authorizationResponse,
         error: authorizationError
       } as AuthorizationRequestResponse
+
       emitter.emit(
         ServerEventsEmitter.ON_AUTHORIZATION_RESPONSE,
         completeResponse
       )
-      response.end('Close your browser to continue')
+
+      fs.readFile(path.join(__static, '/redirect.html'), function(
+        err,
+        html
+      ) {
+        if (err) {
+          throw err
+        }
+        response.writeHead(200, {
+          'Content-Type': 'text/html',
+          'Content-Length': html.length
+        })
+        response.write(html)
+        response.end()
+      })
     }
 
     this.authorizationPromise = new Promise<AuthorizationRequestResponse>(
@@ -143,5 +149,14 @@ export class ElectronRequestHandler extends AuthorizationRequestHandler {
         log('Something bad happened ', error)
         emitter.emit(ServerEventsEmitter.ON_UNABLE_TO_START)
       })
+  }
+
+  protected completeAuthorizationRequest(): Promise<AuthorizationRequestResponse | null> {
+    if (!this.authorizationPromise) {
+      return Promise.reject(
+        'No pending authorization request. Call performAuthorizationRequest() ?'
+      )
+    }
+    return this.authorizationPromise
   }
 }

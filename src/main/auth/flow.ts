@@ -29,7 +29,7 @@ import {
   TokenRequestHandler,
   TokenResponse
 } from '@openid/appauth'
-import { NodeBasedHandler, NodeCrypto, NodeRequestor } from '@openid/appauth/built/node_support'
+import { NodeCrypto, NodeRequestor } from '@openid/appauth/built/node_support'
 import { ElectronRequestHandler } from './request-handler'
 
 import { log } from '../logger'
@@ -75,7 +75,6 @@ export class AuthFlow {
     this.notifier = new AuthorizationNotifier()
     this.authStateEmitter = new AuthStateEmitter()
 
-
     this.authorizationHandler = new ElectronRequestHandler()
     this.tokenHandler = new BaseTokenRequestHandler(this.requestor)
     // set notifier to deliver responses
@@ -89,7 +88,6 @@ export class AuthFlow {
         if (request.internal && request.internal.code_verifier) {
           codeVerifier = request.internal.code_verifier
         }
-
         this.makeRefreshTokenRequest(response.code, codeVerifier)
           .then(result => this.performWithFreshTokens())
           .then(() => {
