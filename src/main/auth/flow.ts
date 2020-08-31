@@ -14,52 +14,45 @@
  * the License.
  */
 
-import { AuthorizationRequest } from '@openid/appauth/built/authorization_request'
+
+import { EventEmitter } from 'events'
 import {
   AuthorizationNotifier,
+  AuthorizationRequest,
   AuthorizationRequestHandler,
-  AuthorizationRequestResponse,
-  BUILT_IN_PARAMETERS
-} from '@openid/appauth/built/authorization_request_handler'
-import { AuthorizationResponse } from '@openid/appauth/built/authorization_response'
-import { AuthorizationServiceConfiguration } from '@openid/appauth/built/authorization_service_configuration'
-import { NodeCrypto } from '@openid/appauth/built/node_support/'
-import { NodeBasedHandler } from '@openid/appauth/built/node_support/node_request_handler'
-import { NodeRequestor } from '@openid/appauth/built/node_support/node_requestor'
-import {
+  AuthorizationServiceConfiguration,
+  BaseTokenRequestHandler,
   GRANT_TYPE_AUTHORIZATION_CODE,
   GRANT_TYPE_REFRESH_TOKEN,
-  TokenRequest
-} from '@openid/appauth/built/token_request'
-import {
-  BaseTokenRequestHandler,
-  TokenRequestHandler
-} from '@openid/appauth/built/token_request_handler'
-import { TokenError, TokenResponse } from '@openid/appauth/built/token_response'
-import { EventEmitter } from 'events'
+  StringMap,
+  TokenRequest,
+  TokenRequestHandler,
+  TokenResponse
+} from '@openid/appauth'
+import { NodeBasedHandler, NodeCrypto, NodeRequestor } from '@openid/appauth/built/node_support'
+import { ElectronRequestHandler } from './request-handler'
+
 import { log } from '../logger'
-import { StringMap } from '@openid/appauth/built/types'
+import Main from '../main'
 
 export class AuthStateEmitter extends EventEmitter {
   static ON_TOKEN_RESPONSE = 'on_token_response'
 }
 
-/* the Node.js based HTTP client. */
-const requestor = new NodeRequestor()
-
-/* an example open id connect provider */
-const openIdConnectUrl = 'https://localhost:5001'
-
-/* example client configuration */
-const clientId = 'console.pkce'
-const redirectUri = 'http://localhost:8000'
-const scope = 'openid profile email offline_access'
+export interface ClientConfig {
+  openIdConnectUrl: string
+  clientId: string
+  redirectUri: string
+  scope: string
+}
 
 export class AuthFlow {
-  private notifier: AuthorizationNotifier
-  private authorizationHandler: AuthorizationRequestHandler
+  private readonly requestor: NodeRequestor
+  private readonly notifier: AuthorizationNotifier
+
+  private clientConfig: ClientConfig
   private tokenHandler: TokenRequestHandler
-  readonly authStateEmitter: AuthStateEmitter
+  private authorizationHandler: AuthorizationRequestHandler
 
   // state
   private configuration: AuthorizationServiceConfiguration | undefined
@@ -67,11 +60,24 @@ export class AuthFlow {
   private refreshToken: string | undefined
   private accessTokenResponse: TokenResponse | undefined
 
+  readonly authStateEmitter: AuthStateEmitter
+
   constructor() {
+    // define client config
+    this.clientConfig = {
+      openIdConnectUrl: 'https://demo.identityserver.io/',
+      clientId: 'interactive.public',
+      redirectUri: 'http://localhost:8000',
+      scope: 'openid profile email offline_access'
+    }
+
+    this.requestor = new NodeRequestor()
     this.notifier = new AuthorizationNotifier()
     this.authStateEmitter = new AuthStateEmitter()
-    this.authorizationHandler = new NodeBasedHandler()
-    this.tokenHandler = new BaseTokenRequestHandler(requestor)
+
+
+    this.authorizationHandler = new ElectronRequestHandler()
+    this.tokenHandler = new BaseTokenRequestHandler(this.requestor)
     // set notifier to deliver responses
     this.authorizationHandler.setAuthorizationNotifier(this.notifier)
     // set a listener to listen for authorization responses
@@ -87,6 +93,7 @@ export class AuthFlow {
         this.makeRefreshTokenRequest(response.code, codeVerifier)
           .then(result => this.performWithFreshTokens())
           .then(() => {
+            Main.loadURL('app://./index.html')
             this.authStateEmitter.emit(AuthStateEmitter.ON_TOKEN_RESPONSE)
             log('All Done.')
           })
@@ -96,8 +103,8 @@ export class AuthFlow {
 
   fetchServiceConfiguration(): Promise<void> {
     return AuthorizationServiceConfiguration.fetchFromIssuer(
-      openIdConnectUrl,
-      requestor
+      this.clientConfig.openIdConnectUrl,
+      this.requestor
     ).then(response => {
       log('Fetched service configuration', response)
       this.configuration = response
@@ -111,6 +118,7 @@ export class AuthFlow {
     }
 
     const extras: StringMap = { prompt: 'consent', access_type: 'offline' }
+
     if (username) {
       extras['login_hint'] = username
     }
@@ -118,9 +126,9 @@ export class AuthFlow {
     // create a request
     const request = new AuthorizationRequest(
       {
-        client_id: clientId,
-        redirect_uri: redirectUri,
-        scope: scope,
+        client_id: this.clientConfig.clientId,
+        redirect_uri: this.clientConfig.redirectUri,
+        scope: this.clientConfig.scope,
         response_type: AuthorizationRequest.RESPONSE_TYPE_CODE,
         state: undefined,
         extras: extras
@@ -136,43 +144,7 @@ export class AuthFlow {
     )
   }
 
-  private makeRefreshTokenRequest(
-    code: string,
-    codeVerifier: string | undefined
-  ): Promise<void> {
-    if (!this.configuration) {
-      log('Unknown service configuration')
-      return Promise.resolve()
-    }
-
-    const extras: StringMap = {}
-
-    if (codeVerifier) {
-      extras.code_verifier = codeVerifier
-    }
-
-    // use the code to make the token request.
-    let request = new TokenRequest({
-      client_id: clientId,
-      redirect_uri: redirectUri,
-      grant_type: GRANT_TYPE_AUTHORIZATION_CODE,
-      code: code,
-      refresh_token: undefined,
-      extras: extras
-    })
-
-    return this.tokenHandler
-      .performTokenRequest(this.configuration, request)
-      .then(response => {
-        log(`Refresh Token is ${response.refreshToken}`)
-        this.refreshToken = response.refreshToken
-        this.accessTokenResponse = response
-        return response
-      })
-      .then(() => {})
-  }
-
-  loggedIn(): boolean {
+  isLoggedIn(): boolean {
     return !!this.accessTokenResponse && this.accessTokenResponse.isValid()
   }
 
@@ -195,8 +167,8 @@ export class AuthFlow {
       return Promise.resolve(this.accessTokenResponse.accessToken)
     }
     let request = new TokenRequest({
-      client_id: clientId,
-      redirect_uri: redirectUri,
+      client_id: this.clientConfig.clientId,
+      redirect_uri: this.clientConfig.redirectUri,
       grant_type: GRANT_TYPE_REFRESH_TOKEN,
       code: undefined,
       refresh_token: this.refreshToken,
@@ -209,5 +181,41 @@ export class AuthFlow {
         this.accessTokenResponse = response
         return response.accessToken
       })
+  }
+
+  private makeRefreshTokenRequest(
+    code: string,
+    codeVerifier: string | undefined
+  ): Promise<void> {
+    if (!this.configuration) {
+      log('Unknown service configuration')
+      return Promise.resolve()
+    }
+
+    const extras: StringMap = {}
+
+    if (codeVerifier) {
+      extras.code_verifier = codeVerifier
+    }
+
+    // use the code to make the token request.
+    let request = new TokenRequest({
+      client_id: this.clientConfig.clientId,
+      redirect_uri: this.clientConfig.redirectUri,
+      grant_type: GRANT_TYPE_AUTHORIZATION_CODE,
+      code: code,
+      refresh_token: undefined,
+      extras: extras
+    })
+
+    return this.tokenHandler
+      .performTokenRequest(this.configuration, request)
+      .then(response => {
+        log(`Refresh Token is ${response.refreshToken}`)
+        this.refreshToken = response.refreshToken
+        this.accessTokenResponse = response
+        return response
+      })
+      .then(() => {})
   }
 }

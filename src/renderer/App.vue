@@ -32,7 +32,15 @@
 </style>
 <script>
 import Vue from 'vue'
-import { Component } from 'vue-class-component'
+import { Component } from 'vue-property-decorator'
 
-export default class App extends Vue {}
+@Component
+export default class App extends Vue {
+  mounted() {
+    console.log('App mounted')
+    this.$store.dispatch('requestNewToken').then(() => {
+      this.$store.dispatch('getUserInfo')
+    })
+  }
+}
 </script>

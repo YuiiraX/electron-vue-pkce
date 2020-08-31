@@ -84,6 +84,32 @@ export default class Main {
     ])
   }
 
+  static loadURL(target: string) {
+    if (Main.mainWindow) {
+      const link = new URL(target)
+
+      if (link.protocol === 'app:') {
+        if (process.env.WEBPACK_DEV_SERVER_URL) {
+          // Load the url of the dev server if in development mode
+          Main.mainWindow
+            .loadURL(process.env.WEBPACK_DEV_SERVER_URL as string)
+            .catch(e => console.error(e))
+
+          if (!process.env.IS_TEST)
+            Main.mainWindow.webContents.openDevTools({ mode: 'detach' })
+        } else {
+          createProtocol('app')
+          // Load the index.html when not in development
+          Main.mainWindow
+            .loadURL('app://./index.html')
+            .catch(e => console.error(e))
+        }
+      } else {
+        Main.mainWindow.loadURL(target).catch(e => console.error(e))
+      }
+    }
+  }
+
   static start(
     app: Electron.App,
     ipcMain: Electron.IpcMain,

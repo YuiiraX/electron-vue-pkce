@@ -8,7 +8,6 @@ const name = process.env.VUE_APP_NAME || 'Electron Vue PKCE Auth Sample'
 const vueSrc = './src/renderer'
 
 module.exports = {
-  transpileDependencies: ['vuetify'],
   devServer: {
     port: devServerPort,
     overlay: {
@@ -33,7 +32,7 @@ module.exports = {
   pluginOptions: {
     electronBuilder: {
       builderOptions: {
-        productName: 'ElectronVuePKCEExample',
+        productName: 'ElectronVuePKCEAuthSample',
         win: {
           target: 'zip',
           icon: './app.ico'

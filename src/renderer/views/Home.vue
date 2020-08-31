@@ -1,6 +1,9 @@
 <template>
   <div class="home">
     <LoginButton />
+    <span>
+      {{ userInfo }}
+    </span>
   </div>
 </template>
 
@@ -10,6 +13,11 @@ import LoginButton from '@/components/LoginButton.vue'
 
 export default {
   name: 'Home',
+  computed: {
+    userInfo() {
+      return this.$store.state.userInfo
+    }
+  },
   components: {
     LoginButton
   },
