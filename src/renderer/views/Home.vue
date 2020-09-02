@@ -1,29 +1,37 @@
 <template>
   <div class="home">
-    <LoginButton />
-    <span>
-      {{ userInfo }}
-    </span>
+    <button @click.prevent="signIn">Login</button>
+    <button @click.prevent="callApi">Call Api</button>
+    <div>
+      <span>
+        {{ userInfo }}
+      </span>
+    </div>
+    <div>
+      <span>
+        {{ apiResponse }}
+      </span>
+    </div>
   </div>
 </template>
 
 <script>
 // @ is an alias to /src
-import LoginButton from '@/components/LoginButton.vue'
+import { mapState } from 'vuex'
 
 export default {
   name: 'Home',
   computed: {
-    userInfo() {
-      return this.$store.state.userInfo
-    }
-  },
-  components: {
-    LoginButton
+    ...mapState(['userInfo', 'apiResponse'])
   },
   methods: {
-    callIpc() {
-      window.ipcRenderer.send('auth-request')
+    signIn() {
+      this.$store.dispatch('signIn').then(() => {
+        this.$store.dispatch('getUserInfo')
+      })
+    },
+    callApi() {
+      this.$store.dispatch('callApi')
     }
   }
 }

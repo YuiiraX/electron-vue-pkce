@@ -6,7 +6,8 @@ Vue.use(Vuex)
 export default new Vuex.Store({
   state: {
     userInfo: null,
-    accessToken: null
+    accessToken: null,
+    apiResponse: null
   },
   mutations: {
     SET_USER_INFO: (state, payload) => {
@@ -14,11 +15,52 @@ export default new Vuex.Store({
     },
     SET_ACCESS_TOKEN: (state, payload) => {
       state.accessToken = payload
+    },
+    SET_API_RESPONSE: (state, payload) => {
+      state.apiResponse = payload
     }
   },
   actions: {
     signIn: () => {
       window.ipcRenderer.send('auth-request')
+    },
+    signOut: ({ commit }) => {
+      return new Promise((resolve, reject) => {
+        console.log('checking for saved user')
+        window.ipcRenderer.send('sign-out-request')
+        window.ipcRenderer.once('sign-out-response', (event, args) => {
+          console.log(args)
+          if (!args.status || args.status !== 'ok') {
+            reject()
+          }
+
+          commit('SET_ACCESS_TOKEN', null)
+          commit('SET_USER_INFO', null)
+          resolve()
+        })
+      })
+    },
+    callApi: ({ state, commit }) => {
+      return new Promise((resolve, reject) => {
+        // You can use axios to call the apis as well
+        const request = new Request('https://demo.identityserver.io/api/test', {
+          headers: new Headers({
+            Authorization: `Bearer ${state.accessToken}`
+          }),
+          method: 'GET',
+          cache: 'no-cache'
+        })
+        fetch(request)
+          .then(result => result.json())
+          .then(response => {
+            console.log('User Info ', response)
+            commit('SET_API_RESPONSE', response)
+            resolve()
+          })
+          .catch(error => {
+            reject(error)
+          })
+      })
     },
     requestNewToken: context => {
       return new Promise((resolve, reject) => {
@@ -37,29 +79,32 @@ export default new Vuex.Store({
         })
       })
     },
-    getUserInfo: context => {
+    getUserInfo: ({ state, commit }) => {
       return new Promise((resolve, reject) => {
-        const request = new Request(
-          'https://demo.identityserver.io/connect/userinfo',
-          {
-            headers: new Headers({
-              Authorization: `Bearer ${context.state.accessToken}`
-            }),
-            method: 'GET',
-            cache: 'no-cache'
-          }
-        )
-
-        fetch(request)
-          .then(result => result.json())
-          .then(user => {
-            console.log('User Info ', user)
-            context.commit('SET_USER_INFO', user)
-            resolve()
-          })
-          .catch(error => {
-            reject(error)
-          })
+        if (state.accessToken) {
+          const request = new Request(
+            'https://demo.identityserver.io/connect/userinfo',
+            {
+              headers: new Headers({
+                Authorization: `Bearer ${state.accessToken}`
+              }),
+              method: 'GET',
+              cache: 'no-cache'
+            }
+          )
+          fetch(request)
+            .then(result => result.json())
+            .then(user => {
+              console.log('User Info ', user)
+              commit('SET_USER_INFO', user)
+              resolve()
+            })
+            .catch(error => {
+              reject(error)
+            })
+        } else {
+          reject('Please sign in to get user info')
+        }
       })
     }
   }

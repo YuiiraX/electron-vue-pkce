@@ -14,7 +14,6 @@
  * the License.
  */
 
-
 import { EventEmitter } from 'events'
 import {
   AuthorizationNotifier,
@@ -68,7 +67,7 @@ export class AuthFlow {
       openIdConnectUrl: 'https://demo.identityserver.io/',
       clientId: 'interactive.public',
       redirectUri: 'http://localhost:8000',
-      scope: 'openid profile email offline_access'
+      scope: 'openid profile email api offline_access'
     }
 
     this.requestor = new NodeRequestor()
@@ -89,7 +88,7 @@ export class AuthFlow {
           codeVerifier = request.internal.code_verifier
         }
         this.makeRefreshTokenRequest(response.code, codeVerifier)
-          .then(result => this.performWithFreshTokens())
+          .then(() => this.performWithFreshTokens())
           .then(() => {
             Main.loadURL('app://./index.html')
             this.authStateEmitter.emit(AuthStateEmitter.ON_TOKEN_RESPONSE)
@@ -115,7 +114,10 @@ export class AuthFlow {
       return
     }
 
-    const extras: StringMap = { prompt: 'consent', access_type: 'offline' }
+    const extras: StringMap = {
+      // prompt: 'consent',
+      access_type: 'offline'
+    }
 
     if (username) {
       extras['login_hint'] = username
@@ -148,6 +150,8 @@ export class AuthFlow {
 
   signOut() {
     // forget all cached token state
+
+    // TODO: calling revoke endpoint to revoke access
     this.accessTokenResponse = undefined
   }
 

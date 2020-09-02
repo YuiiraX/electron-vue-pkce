@@ -1,5 +1,5 @@
 import * as path from 'path'
-import fs from 'fs'
+
 import { app, protocol, BrowserWindow } from 'electron'
 import { createProtocol } from 'vue-cli-plugin-electron-builder/lib'
 import installExtension, { VUEJS_DEVTOOLS } from 'electron-devtools-installer'
@@ -7,15 +7,18 @@ import installExtension, { VUEJS_DEVTOOLS } from 'electron-devtools-installer'
 import SecurityConfig from './security'
 import defaultApplicationConfig, { ApplicationConfig } from './config'
 import { IpcRegistry } from './ipc'
+import { AuthFlow } from './auth/flow'
 
 const isDevelopment = process.env.NODE_ENV !== 'production'
 
 export default class Main {
+  private static config: ApplicationConfig
   private static ipcMain: Electron.IpcMain
+  private static authFlow: AuthFlow
   private static mainWindow: Electron.BrowserWindow | null
   private static application: Electron.App
+
   private static BrowserWindow: typeof BrowserWindow
-  private static config: ApplicationConfig
 
   private static createWindow() {
     const windowConfig = Main.config.window
@@ -78,10 +81,13 @@ export default class Main {
     Main.createWindow()
   }
 
-  private static bootstrap() {
-    protocol.registerSchemesAsPrivileged([
-      { scheme: 'app', privileges: { secure: true, standard: true } }
-    ])
+  private static checkAuth() {
+    if (Main.mainWindow && Main.authFlow.isLoggedIn()) {
+      console.log('is authenticated sending is-auth event')
+      Main.mainWindow.webContents.send('is-authenticated')
+    } else {
+      console.log('not authenticated')
+    }
   }
 
   static loadURL(target: string) {
@@ -93,6 +99,7 @@ export default class Main {
           // Load the url of the dev server if in development mode
           Main.mainWindow
             .loadURL(process.env.WEBPACK_DEV_SERVER_URL as string)
+            .then(() => Main.checkAuth)
             .catch(e => console.error(e))
 
           if (!process.env.IS_TEST)
@@ -102,6 +109,7 @@ export default class Main {
           // Load the index.html when not in development
           Main.mainWindow
             .loadURL('app://./index.html')
+            .then(() => Main.checkAuth)
             .catch(e => console.error(e))
         }
       } else {
@@ -114,7 +122,8 @@ export default class Main {
     app: Electron.App,
     ipcMain: Electron.IpcMain,
     browserWindow: typeof BrowserWindow,
-    config: ApplicationConfig = defaultApplicationConfig
+    config: ApplicationConfig = defaultApplicationConfig,
+    authFlow: AuthFlow = new AuthFlow()
   ) {
     // we pass the Electron.App object and the
     // Electron.BrowserWindow into this function
@@ -123,24 +132,31 @@ export default class Main {
 
     Main.application = app
     Main.ipcMain = ipcMain
-    Main.BrowserWindow = browserWindow
     Main.config = config
 
-    Main.bootstrap()
+    Main.BrowserWindow = browserWindow
+    Main.authFlow = authFlow
+
+    protocol.registerSchemesAsPrivileged([
+      { scheme: 'app', privileges: { secure: true, standard: true } }
+    ])
 
     Main.application.removeAsDefaultProtocolClient('electron-test')
     Main.application.setAsDefaultProtocolClient('electron-test')
 
     Main.application.on('window-all-closed', Main.onWindowAllClosed)
     Main.application.on('ready', Main.onReady)
+    Main.application.on('activate', Main.onActivate)
+
+    // Security config
+    // Intercept URL to load only whitelisted URL in the mainWindow
     Main.application.on(
       'web-contents-created',
       SecurityConfig.onWebContentsCreated
     )
-    Main.application.on('activate', Main.onActivate)
 
-    // Register our Ipc
-    IpcRegistry.register(ipcMain)
+    // Register our ipc
+    IpcRegistry.register(ipcMain, authFlow)
 
     // Exit cleanly on request from parent process in development mode.
     if (isDevelopment) {

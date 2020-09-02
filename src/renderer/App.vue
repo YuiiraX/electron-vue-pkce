@@ -36,11 +36,17 @@ import { Component } from 'vue-property-decorator'
 
 @Component
 export default class App extends Vue {
-  mounted() {
-    console.log('App mounted')
-    this.$store.dispatch('requestNewToken').then(() => {
-      this.$store.dispatch('getUserInfo')
-    })
+  created() {
+    this.$store
+      .dispatch('requestNewToken')
+      .then(() => {
+        if (this.$store.state.accessToken) {
+          this.$store.dispatch('getUserInfo')
+        }
+      })
+      .catch(error => {
+        console.error(error)
+      })
   }
 }
 </script>
