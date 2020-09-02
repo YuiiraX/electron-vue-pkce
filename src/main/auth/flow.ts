@@ -31,6 +31,7 @@ import {
 import { NodeCrypto, NodeRequestor } from '@openid/appauth/built/node_support'
 import { ElectronRequestHandler } from './request-handler'
 
+import config, { OAuthClientConfig } from '../config'
 import { log } from '../logger'
 import Main from '../main'
 
@@ -38,18 +39,11 @@ export class AuthStateEmitter extends EventEmitter {
   static ON_TOKEN_RESPONSE = 'on_token_response'
 }
 
-export interface ClientConfig {
-  openIdConnectUrl: string
-  clientId: string
-  redirectUri: string
-  scope: string
-}
-
 export class AuthFlow {
   private readonly requestor: NodeRequestor
   private readonly notifier: AuthorizationNotifier
 
-  private clientConfig: ClientConfig
+  private clientConfig: OAuthClientConfig
   private tokenHandler: TokenRequestHandler
   private authorizationHandler: AuthorizationRequestHandler
 
@@ -63,12 +57,7 @@ export class AuthFlow {
 
   constructor() {
     // define client config
-    this.clientConfig = {
-      openIdConnectUrl: 'https://demo.identityserver.io/',
-      clientId: 'interactive.public',
-      redirectUri: 'http://localhost:8000',
-      scope: 'openid profile email api offline_access'
-    }
+    this.clientConfig = config.oauthClient
 
     this.requestor = new NodeRequestor()
     this.notifier = new AuthorizationNotifier()
@@ -99,12 +88,15 @@ export class AuthFlow {
   }
 
   fetchServiceConfiguration(): Promise<void> {
+    console.log(this.clientConfig)
     return AuthorizationServiceConfiguration.fetchFromIssuer(
       this.clientConfig.openIdConnectUrl,
       this.requestor
     ).then(response => {
       log('Fetched service configuration', response)
       this.configuration = response
+    }).catch(e => {
+      log('Problem with fetchingServiceConfig\n', e)
     })
   }
 

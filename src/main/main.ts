@@ -5,14 +5,15 @@ import { createProtocol } from 'vue-cli-plugin-electron-builder/lib'
 import installExtension, { VUEJS_DEVTOOLS } from 'electron-devtools-installer'
 
 import SecurityConfig from './security'
-import defaultApplicationConfig, { ApplicationConfig } from './config'
+import defaultConfig, { ElectronConfig } from './config'
 import { IpcRegistry } from './ipc'
 import { AuthFlow } from './auth/flow'
+import { log } from './logger'
 
 const isDevelopment = process.env.NODE_ENV !== 'production'
 
 export default class Main {
-  private static config: ApplicationConfig
+  private static config: ElectronConfig
   private static ipcMain: Electron.IpcMain
   private static authFlow: AuthFlow
   private static mainWindow: Electron.BrowserWindow | null
@@ -21,11 +22,11 @@ export default class Main {
   private static BrowserWindow: typeof BrowserWindow
 
   private static createWindow() {
-    const windowConfig = Main.config.window
+    const config = Main.config
 
     Main.mainWindow = new BrowserWindow({
-      width: windowConfig.width,
-      height: windowConfig.height,
+      width: config.width,
+      height: config.height,
       webPreferences: {
         // Use pluginOptions.nodeIntegration, leave this alone
         // See nklayman.github.io/vue-cli-plugin-electron-builder/guide/security.html#node-integration for more info
@@ -37,14 +38,14 @@ export default class Main {
 
     if (process.env.WEBPACK_DEV_SERVER_URL) {
       // Load the url of the dev server if in development mode
-      Main.mainWindow.loadURL(process.env.WEBPACK_DEV_SERVER_URL as string)
+      Main.mainWindow.loadURL(process.env.WEBPACK_DEV_SERVER_URL as string).catch(e => log(e))
 
       if (!process.env.IS_TEST)
         Main.mainWindow.webContents.openDevTools({ mode: 'detach' })
     } else {
       createProtocol('app')
       // Load the index.html when not in development
-      Main.mainWindow.loadURL('app://./index.html').catch(e => console.error(e))
+      Main.mainWindow.loadURL('app://./index.html').catch(e => log(e))
     }
 
     Main.mainWindow.on('closed', Main.onClosed)
@@ -122,7 +123,7 @@ export default class Main {
     app: Electron.App,
     ipcMain: Electron.IpcMain,
     browserWindow: typeof BrowserWindow,
-    config: ApplicationConfig = defaultApplicationConfig,
+    config: ElectronConfig = defaultConfig.electron,
     authFlow: AuthFlow = new AuthFlow()
   ) {
     // we pass the Electron.App object and the

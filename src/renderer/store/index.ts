@@ -43,7 +43,10 @@ export default new Vuex.Store({
     callApi: ({ state, commit }) => {
       return new Promise((resolve, reject) => {
         // You can use axios to call the apis as well
-        const request = new Request('https://demo.identityserver.io/api/test', {
+        const apiEndpoint =
+          process.env.APP_API_ENDPOINT ||
+          'https://demo.identityserver.io/api/test'
+        const request = new Request(apiEndpoint, {
           headers: new Headers({
             Authorization: `Bearer ${state.accessToken}`
           }),
@@ -83,7 +86,8 @@ export default new Vuex.Store({
       return new Promise((resolve, reject) => {
         if (state.accessToken) {
           const request = new Request(
-            'https://demo.identityserver.io/connect/userinfo',
+            (process.env.APP_OAUTH_USER_ENDPOINT as string) ||
+              'https://demo.identityserver.io/connect/userinfo',
             {
               headers: new Headers({
                 Authorization: `Bearer ${state.accessToken}`
